@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mamão Chat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        {% block content %}
+            {% if pagina == 'abertura' %}
+                <div class="abertura">
+                    <h1>Mamão Chat</h1>
+                    <a href="{{ url_for('login') }}">Entrar</a>
+                </div>
+            {% elif pagina == 'login' %}
+                <div class="cadastro">
+                    <h1>Entrar</h1>
+                    <form method="POST">
+                        <input type="text" name="nome" placeholder="Nome" required>
+                        <input type="password" name="senha" placeholder="Senha" required>
+                        <select name="tipo">
+                            <option value="cliente">Cliente</option>
+                            <option value="lojista">Lojista</option>
+                        </select>
+                        <button type="submit">Entrar</button>
+                    </form>
+                    <p><a href="{{ url_for('cadastro') }}">Cadastrar-se</a></p>
+                    {% with messages = get_flashed_messages() %}
+                        {% if messages %}
+                            {% for message in messages %}
+                                <p class="erro">{{ message }}</p>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                </div>
+            {% elif pagina == 'cadastro' %}
+                <div class="cadastro">
+                    <h1>Cadastrar</h1>
+                    <form method="POST">
+                        <input type="text" name="nome" placeholder="Nome" required>
+                        <input type="password" name="senha" placeholder="Senha (6 dígitos)" required>
+                        <input type="text" name="endereco" placeholder="Endereço" required>
+                        <input type="text" name="telefone" placeholder="Telefone" required>
+                        <input type="text" name="cep" placeholder="CEP" required>
+                        <input type="number" step="0.0001" name="latitude" placeholder="Latitude (ex: -23.5505)" required>
+                        <input type="number" step="0.0001" name="longitude" placeholder="Longitude (ex: -46.6333)" required>
+                        <select name="tipo">
+                            <option value="cliente">Cliente</option>
+                            <option value="lojista">Lojista</option>
+                        </select>
+                        {% if request.args.get('tipo') == 'lojista' or 'tipo' in request.form and request.form['tipo'] == 'lojista' %}
+                            <select name="raio">
+                                <option value="2">2 km</option>
+                                <option value="5" selected>5 km</option>
+                                <option value="10">10 km</option>
+                            </select>
+                        {% endif %}
+                        <button type="submit">Cadastrar</button>
+                    </form>
+                    <button class="voltar" onclick="location.href='{{ url_for('login') }}'">Voltar</button>
+                </div>
+            {% elif pagina == 'painel_cliente' %}
+                <h1>Painel do Cliente - {{ cliente.nome }}</h1>
+                <div class="painel-cliente">
+                    <h2>Lojistas Disponíveis</h2>
+                    <form method="POST">
+                        <select name="lojista_id">
+                            {% for lojista in lojistas %}
+                                <option value="{{ lojista.id }}" {% if lojista_selecionado and lojista.id == lojista_selecionado.id %}selected{% endif %}>{{ lojista.nome }} ({{ lojista.raio }} km)</option>
+                            {% endfor %}
+                        </select>
+                        <input type="hidden" name="acao" value="selecionar_lojista">
+                        <button type="submit">Selecionar</button>
+                    </form>
+                    <h2>Produtos</h2>
+                    <div class="scroll">
+                        {% for produto in produtos %}
+                            <p>{{ produto.nome }} - R${{ "%.2f" % produto.preco }}
+                                <form method="POST" style="display:inline;">
+                                    <input type="hidden" name="acao" value="adicionar">
+                                    <input type="hidden" name="produto_id" value="{{ produto.id }}">
+                                    <button type="submit">Adicionar</button>
+                                </form>
+                            </p>
+                        {% endfor %}
+                    </div>
+                    <h2>Carrinho</h2>
+                    <div class="scroll-itens carrinho">
+                        {% for item in carrinho_itens %}
+                            <p>{{ item.nome }} - R${{ "%.2f" % item.preco }}</p>
+                        {% endfor %}
+                    </div>
+                    <p>Total: R${{ "%.2f" % total }}</p>
+                    <form method="POST">
+                        <input type="hidden" name="acao" value="pagar">
+                        <button type="submit">Pagar</button>
+                    </form>
+                </div>
+                <button class="voltar" onclick="location.href='{{ url_for('logout') }}'">Sair</button>
+            {% elif pagina == 'caixa' %}
+                <h1>Caixa - {{ lojista.nome }}</h1>
+                <div class="painel caixa">
+                    <h2>Status</h2>
+                    <p>Loja {{ "Online" if lojista.online else "Offline" }}</p>
+                    <form method="POST" style="display:inline;">
+                        <input type="hidden" name="acao" value="abrir_loja">
+                        <button type="submit">Abrir Loja</button>
+                    </form>
+                    <form method="POST" style="display:inline;">
+                        <input type="hidden" name="acao" value="fechar_loja">
+                        <button type="submit">Fechar Loja</button>
+                    </form>
+                    <h2>Catálogo</h2>
+                    <div class="scroll">
+                        {% for produto in catalogo %}
+                            <p>{{ produto.nome }} - R${{ "%.2f" % produto.preco }} ({{ produto.quantidade }} {{ produto.unidade }})</p>
+                        {% endfor %}
+                    </div>
+                    <form method="GET" action="{{ url_for('estoque') }}" style="display:inline;">
+                        <button type="submit">Gerenciar Estoque</button>
+                    </form>
+                    <h2>Pedidos em Andamento</h2>
+                    <div class="scroll">
+                        {% for pedido in pedidos_abertos %}
+                            <p>Cliente: {{ Cliente.query.get(pedido.cliente_id).nome }} - {{ pedido.itens }} - R${{ "%.2f" % pedido.total }} - {{ pedido.endereco_entrega }} - {{ pedido.forma_pagamento }}
+                                <a href="{{ url_for('chat', lojista_id=lojista.id, cliente_id=pedido.cliente_id) }}">Chat</a>
+                                <form method="POST" style="display:inline;">
+                                    <input type="hidden" name="acao" value="finalizar_pedido">
+                                    <input type="hidden" name="pedido_id" value="{{ pedido.id }}">
+                                    <button type="submit">Finalizar</button>
+                                </form>
+                                <form method="POST" style="display:inline;">
+                                    <input type="hidden" name="acao" value="cancelar_pedido">
+                                    <input type="hidden" name="pedido_id" value="{{ pedido.id }}">
+                                    <button type="submit">Cancelar</button>
+                                </form>
+                            </p>
+                        {% endfor %}
+                    </div>
+                </div>
+                <button class="voltar" onclick="location.href='{{ url_for('logout') }}'">Sair</button>
+            {% elif pagina == 'estoque' %}
+                <h1>Estoque - {{ lojista.nome }}</h1>
+                <div class="painel estoque">
+                    <h2>Adicionar Produto</h2>
+                    <form method="POST">
+                        <input type="text" name="nome" placeholder="Nome" required>
+                        <input type="text" name="tipo" placeholder="Tipo" required>
+                        <input type="text" name="categoria" placeholder="Categoria (ex: Alimentos)" required>
+                        <input type="text" name="subcategoria" placeholder="Subcategoria (ex: Refrigerantes)">
+                        <input type="text" name="unidade" placeholder="Unidade" required>
+                        <input type="number" name="quantidade" placeholder="Quantidade" required>
+                        <input type="text" name="codigo" placeholder="Código" required>
+                        <input type="number" step="0.01" name="preco" placeholder="Preço de venda" required>
+                        <input type="text" name="localizacao" placeholder="Localização (ex: Prateleira 1)" required>
+                        <input type="number" step="0.01" name="custo_unitario" placeholder="Custo unitário">
+                        <input type="text" name="fornecedor" placeholder="Fornecedor">
+                        <input type="text" name="data_validade" placeholder="Data de validade (ex: 2025-12-31)">
+                        <input type="hidden" name="acao" value="adicionar_produto">
+                        <button type="submit">Adicionar</button>
+                    </form>
+                    <h2>Ajustar Raio de Entrega</h2>
+                    <form method="POST">
+                        <select name="raio">
+                            <option value="2" {% if lojista.raio == 2 %}selected{% endif %}>2 km</option>
+                            <option value="5" {% if lojista.raio == 5 %}selected{% endif %}>5 km</option>
+                            <option value="10" {% if lojista.raio == 10 %}selected{% endif %}>10 km</option>
+                        </select>
+                        <input type="hidden" name="acao" value="alterar_raio">
+                        <button type="submit">Alterar</button>
+                    </form>
+                    <h2>Produtos em Estoque</h2>
+                    <div class="scroll">
+                        {% for produto in estoque %}
+                            <p>{{ produto.nome }} ({{ produto.categoria }}/{{ produto.subcategoria or 'N/A' }}) - {{ produto.quantidade }} {{ produto.unidade }} - R${{ "%.2f" % produto.preco }} - {{ produto.localizacao }}
+                                <form method="POST" style="display:inline;">
+                                    <input type="number" name="quantidade" value="{{ produto.quantidade }}" style="width: 60px;">
+                                    <input type="hidden" name="produto_id" value="{{ produto.id }}">
+                                    <input type="hidden" name="acao" value="atualizar_estoque">
+                                    <button type="submit">Atualizar</button>
+                                </form>
+                            </p>
+                        {% endfor %}
+                    </div>
+                </div>
+                <button class="voltar" onclick="location.href='{{ url_for('caixa') }}'">Voltar ao Caixa</button>
+            {% elif pagina == 'chat' %}
+                <h1>Chat entre {{ cliente.nome }} e {{ lojista.nome }}</h1>
+                <div class="painel scroll">
+                    {% for mensagem in mensagens %}
+                        <div class="{{ 'enviada' if mensagem.remetente == 'cliente' and 'cliente_id' in session else 'recebida' }}">
+                            {{ mensagem.texto }}
+                        </div>
+                    {% endfor %}
+                    {% if pedidos_abertos %}
+                        {% for pedido in pedidos_abertos %}
+                            <div class="status-pedido {{ 'em-andamento' if pedido.status == 'Em andamento' else 'finalizado' if pedido.status == 'Finalizado' else 'cancelado' }}">
+                                Pedido: {{ pedido.itens }} - R${{ "%.2f" % pedido.total }} - Status: {{ pedido.status }}
+                                {% if 'cliente_id' in session %}
+                                    <form method="POST" style="display:inline;">
+                                        <input type="hidden" name="acao" value="confirmar_pagamento">
+                                        <input type="hidden" name="pedido_id" value="{{ pedido.id }}">
+                                        <button type="submit">Confirmar Pagamento</button>
+                                    </form>
+                                    <form method="POST" style="display:inline;">
+                                        <input type="hidden" name="acao" value="confirmar_entrega">
+                                        <input type="hidden" name="pedido_id" value="{{ pedido.id }}">
+                                        <button type="submit">Confirmar Entrega</button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                <form method="POST">
+                    <textarea name="texto" placeholder="Digite sua mensagem" required></textarea>
+                    <button type="submit">Enviar</button>
+                </form>
+                <button class="voltar" onclick="location.href='{{ url_for('painel' if 'cliente_id' in session else 'caixa') }}'">Voltar</button>
+            {% endif %}
+        {% endblock %}
+    </div>
+</body>
+</html>
