@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -5,7 +7,72 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/static/style.css">
 </head>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
 <body>
+<script>
+<script>
+const socket = io.connect('http://localhost:8080'); // Muda pra https://mamao-chat.onrender.com no Render
+const peer = new Peer('cliente_{{ session.cliente_id }}');
+    let call;
+
+    function iniciarChamada(lojistaId) {
+        fetch('/verificar_lojista/' + lojistaId)
+            .then(response => response.json())
+            .then(data => {
+                if (data.online) {
+                    navigator.mediaDevices.getUserMedia({ audio: true })
+                        .then(stream => {
+                            call = peer.call('lojista_' + lojistaId, stream);
+                            document.getElementById('chamada').style.display = 'block';
+                            document.getElementById('destinatario').innerText = 'Lojista ' + lojistaId;
+
+                            call.on('stream', remoteStream => {
+                                document.getElementById('audio').srcObject = remoteStream;
+                            });
+
+                            socket.emit('iniciar_chamada', { cliente_id: {{ session.cliente_id }}, lojista_id: lojistaId });
+                        })
+                        .catch(err => alert('Erro no microfone: ' + err));
+                } else {
+                    alert('Lojista offline!');
+                }
+            });
+    }
+
+    peer.on('call', incomingCall => {
+        navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(stream => {
+                incomingCall.answer(stream);
+                call = incomingCall;
+                document.getElementById('chamada').style.display = 'block';
+                document.getElementById('destinatario').innerText = 'Cliente chamando';
+
+                call.on('stream', remoteStream => {
+                    document.getElementById('audio').srcObject = remoteStream;
+                });
+            });
+    });
+
+    function silenciar() {
+        if (call && call.localStream) {
+            call.localStream.getAudioTracks()[0].enabled = !call.localStream.getAudioTracks()[0].enabled;
+        }
+    }
+
+    function encerrar() {
+        if (call) {
+            call.close();
+            document.getElementById('chamada').style.display = 'none';
+        }
+    }
+
+    socket.on('chamada_entrante', data => {
+        alert('Chamada de Cliente ' + data.cliente_id);
+    });
+</script>   
+         
+</script>
     <div class="container">
         {% block content %}
             {% if pagina == 'abertura' %}
@@ -198,6 +265,18 @@
                             <div class="status-pedido {{ 'em-andamento' if pedido.status == 'Em andamento' else 'finalizado' if pedido.status == 'Finalizado' else 'cancelado' }}">
                                 Pedido: {{ pedido.itens }} - R${{ "%.2f" % pedido.total }} - Status: {{ pedido.status }}
                                 {% if 'cliente_id' in session %}
+                               {% for lojista in lojistas %}
+                           <div>
+                           <h3>{{ lojista.nome }}</h3>
+                           <button onclick="iniciarChamada({{ lojista.id }})">Ligar</button>
+                          </div> 
+                           {% endfor %}
+                        <div id="chamada" style="display:none;">
+                       <p>Em ligação com <span id="destinatario"></span></p>
+                        <audio id="audio" autoplay></audio>
+                           <button onclick="silenciar()">Silenciar</button>
+                              <button onclick="encerrar()">Encerrar</button>
+                                   </div>
                                     <form method="POST" style="display:inline;">
                                         <input type="hidden" name="acao" value="confirmar_pagamento">
                                         <input type="hidden" name="pedido_id" value="{{ pedido.id }}">

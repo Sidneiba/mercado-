@@ -1,8 +1,13 @@
+
+
+from flask_socketio import SocketIO, emit
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
+import os
 import math
 
 app = Flask(__name__)
+socketio = SocketIO(app)
 app.secret_key = 'sua_chave_secreta_aqui'  # Troque por algo único
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////data/data/com.termux/files/home/mamao-chat/database.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -296,6 +301,36 @@ def logout():
         db.session.commit()
     session.clear()
     return redirect(url_for('abertura'))
+@app.route('/verificar_lojista/<int:lojista_id>')
+def verificar_lojista(lojista_id):
+    lojista = Lojista.query.get(lojista_id)
+    return jsonify({'online': lojista.online})
+@socketio.on('iniciar_chamada')
+def handle_iniciar_chamada(data):
+    cliente_id = data['cliente_id']
+    lojista_id = data['lojista_id']
+    if Lojista.query.get(lojista_id).online:
+        emit('chamada_entrante', {'cliente_id': cliente_id}, room=f'lojista_{lojista_id}')
+
+@socketio.on('resposta_chamada')
+def handle_resposta_chamada(data):
+    cliente_id = data['cliente_id']
+    emit('chamada_aceita', {'sdp': data['sdp'], 'lojista_id': data['lojista_id']}, room=f'cliente_{cliente_id}')
+
+@socketio.on('offer')
+def handle_offer(data):
+    emit('offer', data, room=f'lojista_{data["lojista_id"]}')
+
+@socketio.on('answer')
+def handle_answer(data):
+    emit('answer', data, room=f'cliente_{data["cliente_id"]}')
+
+@socketio.on('ice_candidate')
+def handle_ice(data):
+    if data['to'] == 'lojista':
+        emit('ice_candidate', data, room=f'lojista_{data["lojista_id"]}')
+    else:
+        emit('ice_candidate', data, room=f'cliente_{data["cliente_id"]}')
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=8080)
+    socketio.run(app, debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
