@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "mercado",
+    "public": "templates",
     "ignore": [
       "firebase.json",
       "**/.*",
