@@ -6,10 +6,11 @@
       "**/.*",
       "**/node_modules/**"
     ],
-    "rewrites": [
+     "redirects": [
       {
         "source": "**",
-        "destination": "/index.html"
+        "destination": "https://mamao-chat.railway.app",
+        "type": 301
       }
     ]
   }
